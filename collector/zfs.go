@@ -18,6 +18,8 @@ package collector
 
 import (
 	"errors"
+	"fmt"
+	"os"
 	"strings"
 
 	"github.com/go-kit/kit/log"
@@ -43,8 +45,14 @@ type zfsCollector struct {
 
 // NewZFSCollector returns a new Collector exposing ZFS statistics.
 func NewZFSCollector(logger log.Logger) (Collector, error) {
+	linuxProcpathBase := "spl/kstat/zfs"
+	_, err := os.Open(procFilePath(linuxProcpathBase))
+	if err != nil {
+		return nil, fmt.Errorf("failed to open zfs: %w", err)
+	}
+
 	return &zfsCollector{
-		linuxProcpathBase:    "spl/kstat/zfs",
+		linuxProcpathBase:    linuxProcpathBase,
 		linuxZpoolIoPath:     "/*/io",
 		linuxZpoolObjsetPath: "/*/objset-*",
 		linuxPathMap: map[string]string{
@@ -65,13 +73,6 @@ func NewZFSCollector(logger log.Logger) (Collector, error) {
 }
 
 func (c *zfsCollector) Update(ch chan<- prometheus.Metric) error {
-
-	if _, err := c.openProcFile(c.linuxProcpathBase); err != nil {
-		if err == errZFSNotAvailable {
-			level.Debug(c.logger).Log("err", err)
-			return ErrNoData
-		}
-	}
 
 	for subsystem := range c.linuxPathMap {
 		if err := c.updateZfsStats(subsystem, ch); err != nil {
